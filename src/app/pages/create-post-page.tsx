@@ -11,8 +11,6 @@ import {
   ArrowLeft,
   Building2,
   FileText,
-  RefreshCw,
-  Image as ImageIcon,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { supabase } from '../../lib/supabase'
