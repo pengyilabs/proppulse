@@ -6,6 +6,11 @@ export interface Organization {
   slug: string
   brand_preferences: Record<string, unknown>
   approval_required: boolean
+  logo_url: string | null
+  tagline: string | null
+  website: string | null
+  default_language: string
+  default_platform: string
   created_at: string
   updated_at: string
 }
@@ -70,7 +75,7 @@ export async function createOrganization(
 
 export async function updateOrganization(
   id: string,
-  updates: Partial<Pick<Organization, 'name' | 'slug' | 'brand_preferences' | 'approval_required'>>
+  updates: Partial<Pick<Organization, 'name' | 'slug' | 'brand_preferences' | 'approval_required' | 'logo_url' | 'tagline' | 'website' | 'default_language' | 'default_platform'>>
 ): Promise<Organization> {
   const { data, error } = await supabase
     .from('organizations')
@@ -138,4 +143,24 @@ export async function removeMember(
     .eq('org_id', orgId)
 
   if (error) throw new Error(error.message)
+}
+
+export async function uploadOrgLogo(
+  file: File,
+  orgId: string
+): Promise<string> {
+  const ext = file.name.split('.').pop()
+  const fileName = `logos/${orgId}/${Date.now()}-${Math.random().toString(36).substring(2)}.${ext}`
+
+  const { error } = await supabase.storage
+    .from('listings')
+    .upload(fileName, file)
+
+  if (error) throw new Error(error.message)
+
+  const { data: urlData } = supabase.storage
+    .from('listings')
+    .getPublicUrl(fileName)
+
+  return urlData.publicUrl
 }
