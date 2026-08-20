@@ -45,7 +45,6 @@ const PLATFORM_CONFIG: Record<string, {
 export function SettingsPage() {
   const { currentOrg, loading: orgLoading } = useOrgStore()
   const [accounts, setAccounts] = useState<SocialAccount[]>([])
-  const [loading, setLoading] = useState(true)
   const [connecting, setConnecting] = useState<string | null>(null)
   const [formState, setFormState] = useState<PlatformFormState>({
     visible: false,
@@ -63,13 +62,10 @@ export function SettingsPage() {
   async function loadAccounts() {
     if (!currentOrg) return
     try {
-      setLoading(true)
       const data = await getSocialAccounts(currentOrg.id)
       setAccounts(data)
     } catch (err: any) {
       toast.error(err.message || 'Failed to load accounts')
-    } finally {
-      setLoading(false)
     }
   }
 

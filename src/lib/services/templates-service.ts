@@ -116,7 +116,7 @@ Respond ONLY with the JSON object, no other text.`
 
 export async function generateTemplate(
   listingId: string,
-  orgId: string
+  _orgId: string
 ): Promise<Pick<Template, 'design_data' | 'name'>> {
   const listing = await getListing(listingId)
 

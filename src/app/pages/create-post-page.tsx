@@ -51,7 +51,7 @@ export function CreatePostPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const preselectedListingId = searchParams.get('listingId')
-  const { currentOrg } = useOrgStore()
+  const { currentOrg, members } = useOrgStore()
   const { user } = useAuth()
 
   const [step, setStep] = useState<Step>('listing')
@@ -72,6 +72,10 @@ export function CreatePostPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+
+  const isAdmin = user
+    ? members.some((m) => m.user_id === user.id && m.role === 'admin')
+    : false
 
   const loadListings = useCallback(async () => {
     if (!currentOrg) return
@@ -189,6 +193,10 @@ export function CreatePostPage() {
         scheduledAt = new Date(`${scheduledDate}T${timeStr}:00`).toISOString()
       }
 
+      // Check if user is admin - auto-approve admin posts
+      const postStatus = isAdmin ? 'approved' : 'pending_approval'
+      const now = new Date().toISOString()
+
       const { error } = await supabase.from('posts').insert({
         org_id: currentOrg.id,
         broker_id: user.id,
@@ -198,12 +206,14 @@ export function CreatePostPage() {
           caption: generatedContent.caption,
           hashtags: generatedContent.hashtags,
           imagePrompt: generatedContent.imagePrompt,
+          imageUrl: generatedContent.imageUrl,
           videoPrompt: generatedContent.videoPrompt,
         },
-        status: 'pending_approval',
+        status: postStatus,
         scheduled_date: scheduledAt,
         platform,
         language,
+        ...(isAdmin ? { approved_by: user.id, approved_at: now } : {}),
       })
 
       if (error) throw new Error(error.message)
@@ -227,7 +237,7 @@ export function CreatePostPage() {
         </div>
         <h2 className="text-xl font-semibold text-foreground">Post Created!</h2>
         <p className="text-sm text-muted-foreground mt-2">
-          Your post has been submitted for approval.
+          Your post has been {isAdmin ? 'approved and scheduled' : 'submitted for approval'}.
         </p>
         <div className="flex gap-3 mt-6">
           <button

@@ -27,7 +27,7 @@ export function OrgStoreProvider({ children }: { children: React.ReactNode }) {
       const orgs = await getOrganizations()
       setOrganizations(orgs)
       if (orgs.length > 0 && !currentOrg) {
-        setCurrentOrg(orgs[0])
+        setCurrentOrg(orgs[0] ?? null)
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load organizations')

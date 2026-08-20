@@ -22,6 +22,7 @@ const LANGUAGE_OPTIONS = [
 
 function FacebookMockup({ content, listing }: { content: GeneratedContent; listing: Listing }) {
   const primaryImage = listing.images?.[0]
+  const displayImage = content.imageUrl || primaryImage
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm max-w-md mx-auto">
@@ -44,10 +45,10 @@ function FacebookMockup({ content, listing }: { content: GeneratedContent; listi
       </div>
 
       {/* Image */}
-      {primaryImage && (
+      {displayImage && (
         <div className="aspect-[16/10] bg-gray-100">
           <img
-            src={primaryImage}
+            src={displayImage}
             alt={listing.title}
             className="w-full h-full object-cover"
           />
@@ -88,6 +89,7 @@ function FacebookMockup({ content, listing }: { content: GeneratedContent; listi
 
 function WeChatMockup({ content, listing }: { content: GeneratedContent; listing: Listing }) {
   const primaryImage = listing.images?.[0]
+  const displayImage = content.imageUrl || primaryImage
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm max-w-md mx-auto">
@@ -109,10 +111,10 @@ function WeChatMockup({ content, listing }: { content: GeneratedContent; listing
           <span>Just now</span>
         </div>
 
-        {primaryImage && (
+        {displayImage && (
           <div className="aspect-[16/9] bg-gray-100 rounded-lg overflow-hidden mb-3">
             <img
-              src={primaryImage}
+              src={displayImage}
               alt={listing.title}
               className="w-full h-full object-cover"
             />
@@ -150,7 +152,7 @@ function WeChatMockup({ content, listing }: { content: GeneratedContent; listing
 export function ContentPreview({
   content,
   listing,
-  template,
+  template: _template,
   onEdit,
   platform,
   language,
@@ -308,6 +310,21 @@ export function ContentPreview({
 
       {activeTab === 'image' && (
         <div className="space-y-4">
+          {content.imageUrl && (
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                <Image className="w-3.5 h-3.5 inline mr-1" />
+                Generated Image
+              </label>
+              <div className="rounded-lg overflow-hidden border border-border">
+                <img
+                  src={content.imageUrl}
+                  alt="AI-generated post image"
+                  className="w-full object-cover"
+                />
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-foreground mb-1.5">
               <Image className="w-3.5 h-3.5 inline mr-1" />
@@ -320,7 +337,7 @@ export function ContentPreview({
             </div>
           </div>
           <p className="text-xs text-muted-foreground/60">
-            This prompt is used by the AI image generator to create the post image. It is not editable here.
+            This prompt was used by the AI image generator to create the post image. It is not editable here.
           </p>
         </div>
       )}

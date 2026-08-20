@@ -56,7 +56,6 @@ export async function getPosts(orgId: string): Promise<PostWithRelations[]> {
       .in('user_id', brokerIds)
 
     if (!memberError && members) {
-      const memberUserIds = new Set(members.map((m: { user_id: string }) => m.user_id))
       const { data: users } = await supabase.auth.admin?.listUsers()
       const emailMap = new Map<string, string>()
 
@@ -111,7 +110,6 @@ export async function getPendingApprovals(orgId: string): Promise<PostWithRelati
       .in('user_id', brokerIds)
 
     if (!memberError && members) {
-      const memberUserIds = new Set(members.map((m: { user_id: string }) => m.user_id))
       const { data: users } = await supabase.auth.admin?.listUsers()
       const emailMap = new Map<string, string>()
 
@@ -189,7 +187,7 @@ export async function approvePost(postId: string, approvedBy: string): Promise<P
 
 export async function rejectPost(
   postId: string,
-  rejectedBy: string,
+  _rejectedBy: string,
   feedback: string
 ): Promise<Post> {
   const now = new Date().toISOString()

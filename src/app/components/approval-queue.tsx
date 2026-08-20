@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Check, X, Loader2, Calendar, Globe, Inbox } from 'lucide-react'
-import { clsx } from 'clsx'
+
 import { getPendingApprovals, approvePost, rejectPost } from '../../lib/services/posts-service'
 import type { PostWithRelations } from '../../lib/services/posts-service'
 import { useAuth } from '../../lib/auth-context'

@@ -1,4 +1,4 @@
-import { callOpenRouter } from '../openrouter'
+import { callOpenRouter, callOpenRouterImage } from '../openrouter'
 import { getListing } from './listings-service'
 import type { Listing } from './listings-service'
 import type { Template } from './templates-service'
@@ -6,6 +6,7 @@ import type { Template } from './templates-service'
 export interface GeneratedContent {
   caption: string
   imagePrompt?: string
+  imageUrl?: string
   videoPrompt?: string
   hashtags: string[]
 }
@@ -233,7 +234,7 @@ export async function generateImagePrompt(
   const prompt = buildImagePromptContent(listing, template, params.language)
 
   const response = await callOpenRouter({
-    model: 'black-forest-labs/flux-schnell',
+    model: 'deepseek/deepseek-chat',
     messages: [
       {
         role: 'system',
@@ -262,6 +263,21 @@ export async function generateImagePrompt(
   }
 
   return { imagePrompt: result.imagePrompt }
+}
+
+export async function generateImage(
+  params: GenerationParams
+): Promise<Pick<GeneratedContent, 'imageUrl' | 'imagePrompt'>> {
+  // First, generate the image prompt using DeepSeek
+  const { imagePrompt } = await generateImagePrompt(params)
+  if (!imagePrompt) {
+    throw new Error('Failed to generate image prompt')
+  }
+
+  // Then, generate the actual image using Flux
+  const { imageUrl } = await callOpenRouterImage(imagePrompt)
+
+  return { imageUrl, imagePrompt }
 }
 
 export async function generateVideoPrompt(
@@ -308,7 +324,7 @@ export async function generateFullContent(
 ): Promise<GeneratedContent> {
   const [textResult, imageResult, videoResult] = await Promise.allSettled([
     generateTextContent(params),
-    generateImagePrompt(params),
+    generateImage(params),
     generateVideoPrompt(params),
   ])
 
@@ -326,6 +342,7 @@ export async function generateFullContent(
 
   if (imageResult.status === 'fulfilled') {
     result.imagePrompt = imageResult.value.imagePrompt
+    result.imageUrl = imageResult.value.imageUrl
   }
 
   if (videoResult.status === 'fulfilled') {
