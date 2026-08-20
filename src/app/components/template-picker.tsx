@@ -1,38 +1,39 @@
 import { useState, useEffect, useCallback } from 'react'
-import { X, Sparkles, Loader2 } from 'lucide-react'
+import { X, Upload, Loader2, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useOrgStore } from '../stores/org-store'
+import { useAuth } from '../../lib/auth-context'
 import type { Template } from '../../lib/services/templates-service'
-import {
-  getTemplatesForListing,
-  generateTemplate,
-  saveTemplate,
-} from '../../lib/services/templates-service'
-import { TemplatePreview } from './template-preview'
+import { getOrgTemplates, uploadTemplate, deleteTemplate } from '../../lib/services/templates-service'
 
 interface TemplatePickerProps {
   isOpen: boolean
   onClose: () => void
   onSelect: (template: Template) => void
-  listingId: string
   orgId?: string
 }
 
-export function TemplatePicker({ isOpen, onClose, onSelect, listingId, orgId: propOrgId }: TemplatePickerProps) {
-  const { currentOrg } = useOrgStore()
+export function TemplatePicker({ isOpen, onClose, onSelect, orgId: propOrgId }: TemplatePickerProps) {
+  const { currentOrg, members } = useOrgStore()
+  const { user } = useAuth()
   const orgId = propOrgId || currentOrg?.id || ''
 
   const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(false)
-  const [generating, setGenerating] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const isAdmin = user
+    ? members.some((m) => m.user_id === user.id && m.role === 'admin')
+    : false
+
   const loadTemplates = useCallback(async () => {
-    if (!listingId) return
+    if (!orgId) return
     setLoading(true)
     setError(null)
     try {
-      const data = await getTemplatesForListing(listingId)
+      const data = await getOrgTemplates(orgId)
       setTemplates(data)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load templates'
@@ -40,7 +41,7 @@ export function TemplatePicker({ isOpen, onClose, onSelect, listingId, orgId: pr
     } finally {
       setLoading(false)
     }
-  }, [listingId])
+  }, [orgId])
 
   useEffect(() => {
     if (isOpen) {
@@ -48,37 +49,35 @@ export function TemplatePicker({ isOpen, onClose, onSelect, listingId, orgId: pr
     }
   }, [isOpen, loadTemplates])
 
-  const handleGenerate = async () => {
-    if (!listingId || !orgId) return
-    setGenerating(true)
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !orgId) return
+
+    setUploading(true)
     setError(null)
     try {
-      // Generate 3 templates
-      const results = await Promise.all([
-        generateTemplate(listingId, orgId),
-        generateTemplate(listingId, orgId),
-        generateTemplate(listingId, orgId),
-      ])
-
-      // Save each generated template
-      const saved: Template[] = []
-      for (const result of results) {
-        const template = await saveTemplate({
-          org_id: orgId,
-          listing_id: listingId,
-          name: result.name,
-          design_data: result.design_data,
-          preview_url: null,
-        })
-        saved.push(template)
-      }
-
-      setTemplates((prev) => [...saved, ...prev])
+      const name = file.name.replace(/\.[^/.]+$/, '') // Remove extension
+      const template = await uploadTemplate(file, orgId, name)
+      setTemplates((prev) => [template, ...prev])
+      toast.success('Template uploaded')
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to generate templates'
+      const message = err instanceof Error ? err.message : 'Failed to upload template'
       setError(message)
     } finally {
-      setGenerating(false)
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteTemplate(id)
+      setTemplates((prev) => prev.filter((t) => t.id !== id))
+      if (selectedId === id) setSelectedId(null)
+      toast.success('Template deleted')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete template'
+      toast.error(message)
     }
   }
 
@@ -99,9 +98,9 @@ export function TemplatePicker({ isOpen, onClose, onSelect, listingId, orgId: pr
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Choose a Template</h2>
+            <h2 className="text-lg font-semibold text-foreground">Choose a Design</h2>
             <p className="text-sm text-muted-foreground">
-              Select a design template for your post, or generate new ones with AI.
+              Select a sign design template for your post.
             </p>
           </div>
           <button
@@ -116,26 +115,31 @@ export function TemplatePicker({ isOpen, onClose, onSelect, listingId, orgId: pr
         <div className="px-6 py-3 border-b border-border shrink-0 flex items-center justify-between">
           <span className="text-sm text-muted-foreground">
             {templates.length > 0
-              ? `${templates.length} template${templates.length !== 1 ? 's' : ''} available`
-              : 'No templates yet'}
+              ? `${templates.length} design${templates.length !== 1 ? 's' : ''} available`
+              : 'No designs yet'}
           </span>
-          <button
-            onClick={handleGenerate}
-            disabled={generating || !listingId || !orgId}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {generating ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                Generate Templates
-              </>
-            )}
-          </button>
+          {isAdmin && (
+            <label className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 cursor-pointer transition-colors">
+              {uploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  Upload Design
+                </>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleUpload}
+                className="hidden"
+                disabled={uploading}
+              />
+            </label>
+          )}
         </div>
 
         {/* Content */}
@@ -153,27 +157,16 @@ export function TemplatePicker({ isOpen, onClose, onSelect, listingId, orgId: pr
             </div>
           )}
 
-          {/* Generating state */}
-          {generating && templates.length === 0 && !loading && (
-            <div className="flex flex-col items-center justify-center py-20 gap-3">
-              <div className="relative">
-                <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-                  <Sparkles className="w-8 h-8 text-primary animate-pulse" />
-                </div>
-                <Loader2 className="w-6 h-6 animate-spin text-primary absolute -bottom-1 -right-1" />
-              </div>
-              <p className="text-sm text-muted-foreground">AI is designing your templates...</p>
-            </div>
-          )}
-
           {/* Empty state */}
-          {!loading && !generating && templates.length === 0 && (
+          {!loading && templates.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 gap-3">
-              <Sparkles className="w-12 h-12 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">No templates for this listing yet.</p>
-              <p className="text-xs text-muted-foreground/60">
-                Click "Generate Templates" to create AI-powered designs.
-              </p>
+              <Upload className="w-12 h-12 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">No designs uploaded yet.</p>
+              {isAdmin && (
+                <p className="text-xs text-muted-foreground/60">
+                  Upload your company's sign designs to get started.
+                </p>
+              )}
             </div>
           )}
 
@@ -181,12 +174,55 @@ export function TemplatePicker({ isOpen, onClose, onSelect, listingId, orgId: pr
           {templates.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {templates.map((template) => (
-                <TemplatePreview
+                <div
                   key={template.id}
-                  template={template}
                   onClick={() => handleSelect(template)}
-                  selected={selectedId === template.id}
-                />
+                  className={`
+                    relative cursor-pointer rounded-xl overflow-hidden bg-secondary border-2 transition-all
+                    ${selectedId === template.id
+                      ? 'border-primary ring-2 ring-primary/20'
+                      : 'border-transparent hover:border-primary/50'
+                    }
+                  `}
+                >
+                  {/* Design image */}
+                  <div className="aspect-[4/5]">
+                    <img
+                      src={template.image_url}
+                      alt={template.name}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+
+                  {/* Label */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
+                    <p className="text-sm font-medium text-white truncate">
+                      {template.name}
+                    </p>
+                  </div>
+
+                  {/* Delete button (admin only) */}
+                  {isAdmin && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDelete(template.id)
+                      }}
+                      className="absolute top-2 right-2 p-1.5 bg-black/40 text-white rounded-lg hover:bg-red-600/80 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* Selected check */}
+                  {selectedId === template.id && (
+                    <div className="absolute top-2 left-2 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -205,7 +241,7 @@ export function TemplatePicker({ isOpen, onClose, onSelect, listingId, orgId: pr
               onClick={onClose}
               className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
             >
-              Use Selected Template
+              Use Selected Design
             </button>
           )}
         </div>

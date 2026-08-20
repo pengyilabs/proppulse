@@ -13,6 +13,11 @@ CREATE TABLE organizations (
   slug TEXT UNIQUE NOT NULL,
   brand_preferences JSONB DEFAULT '{}'::jsonb,
   approval_required BOOLEAN DEFAULT true,
+  logo_url TEXT,
+  tagline TEXT,
+  website TEXT,
+  default_language TEXT DEFAULT 'en' CHECK (default_language IN ('en', 'fr', 'zh')),
+  default_platform TEXT DEFAULT 'facebook' CHECK (default_platform IN ('facebook', 'wechat')),
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -134,15 +139,15 @@ CREATE POLICY "Admins can manage listings"
   );
 
 -- ────────────────────────────────────────────────────────────────────────────
--- Templates (AI-Generated Design Templates)
+-- Templates (Design/Sign Templates uploaded by the org)
 -- ────────────────────────────────────────────────────────────────────────────
 CREATE TABLE templates (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  listing_id UUID REFERENCES listings(id) ON DELETE SET NULL,
-  name TEXT,
-  design_data JSONB NOT NULL DEFAULT '{}'::jsonb,
-  preview_url TEXT,
+  name TEXT NOT NULL,
+  image_url TEXT NOT NULL,
+  type TEXT DEFAULT 'uploaded' CHECK (type IN ('uploaded', 'generated')),
+  design_data JSONB DEFAULT '{}'::jsonb,
   created_by UUID REFERENCES auth.users(id),
   created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -301,20 +306,21 @@ CREATE POLICY "Members can view post insights for org posts"
   );
 
 -- ────────────────────────────────────────────────────────────────────────────
--- Storage Bucket for Listing Images
+-- Storage Buckets
 -- ────────────────────────────────────────────────────────────────────────────
 -- Run these separately in Supabase Storage SQL editor:
 
 -- INSERT INTO storage.buckets (id, name, public) VALUES ('listings', 'listings', true);
+-- INSERT INTO storage.buckets (id, name, public) VALUES ('templates', 'templates', true);
 
 -- CREATE POLICY "Anyone can view listing images"
 --   ON storage.objects FOR SELECT
---   USING (bucket_id = 'listings');
+--   USING (bucket_id IN ('listings', 'templates'));
 
 -- CREATE POLICY "Authenticated users can upload listing images"
 --   ON storage.objects FOR INSERT
---   WITH CHECK (bucket_id = 'listings' AND auth.role() = 'authenticated');
+--   WITH CHECK (bucket_id IN ('listings', 'templates') AND auth.role() = 'authenticated');
 
 -- CREATE POLICY "Users can delete their own listing images"
 --   ON storage.objects FOR DELETE
---   USING (bucket_id = 'listings' AND auth.role() = 'authenticated');
+--   USING (bucket_id IN ('listings', 'templates') AND auth.role() = 'authenticated');

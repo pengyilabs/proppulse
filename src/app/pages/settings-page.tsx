@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle, Circle, Link, Unlink, Loader2 } from 'lucide-react'
+import { CheckCircle, Circle, Link, Unlink, Loader2, Upload, X, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { useOrgStore } from '../stores/org-store'
+import { updateOrganization, uploadOrgLogo } from '../../lib/services/organizations-service'
 import type { SocialAccount } from '../../lib/services/social-accounts-service'
 import {
   getSocialAccounts,
@@ -42,8 +43,19 @@ const PLATFORM_CONFIG: Record<string, {
   },
 }
 
+const LANGUAGE_OPTIONS = [
+  { value: 'en', label: 'English' },
+  { value: 'fr', label: 'French' },
+  { value: 'zh', label: 'Chinese' },
+]
+
+const PLATFORM_OPTIONS = [
+  { value: 'facebook', label: 'Facebook' },
+  { value: 'wechat', label: 'WeChat' },
+]
+
 export function SettingsPage() {
-  const { currentOrg, loading: orgLoading } = useOrgStore()
+  const { currentOrg, loading: orgLoading, setCurrentOrg } = useOrgStore()
   const [accounts, setAccounts] = useState<SocialAccount[]>([])
   const [connecting, setConnecting] = useState<string | null>(null)
   const [formState, setFormState] = useState<PlatformFormState>({
@@ -53,9 +65,21 @@ export function SettingsPage() {
     formValues: {},
   })
 
+  // Branding form state
+  const [tagline, setTagline] = useState('')
+  const [website, setWebsite] = useState('')
+  const [defaultLanguage, setDefaultLanguage] = useState('en')
+  const [defaultPlatform, setDefaultPlatform] = useState('facebook')
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [savingBranding, setSavingBranding] = useState(false)
+
   useEffect(() => {
     if (currentOrg) {
       loadAccounts()
+      setTagline(currentOrg.tagline || '')
+      setWebsite(currentOrg.website || '')
+      setDefaultLanguage(currentOrg.default_language || 'en')
+      setDefaultPlatform(currentOrg.default_platform || 'facebook')
     }
   }, [currentOrg])
 
@@ -104,7 +128,6 @@ export function SettingsPage() {
 
       await connectAccount(currentOrg.id, platform, credentials)
 
-      // Register the adapter in the platform registry
       const adapter =
         platform === 'facebook'
           ? new FacebookAdapter(currentOrg.id)
@@ -145,6 +168,43 @@ export function SettingsPage() {
     }
   }
 
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !currentOrg) return
+
+    setUploadingLogo(true)
+    try {
+      const url = await uploadOrgLogo(file, currentOrg.id)
+      await updateOrganization(currentOrg.id, { logo_url: url })
+      setCurrentOrg({ ...currentOrg, logo_url: url })
+      toast.success('Logo uploaded')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload logo')
+    } finally {
+      setUploadingLogo(false)
+      e.target.value = ''
+    }
+  }
+
+  async function handleSaveBranding() {
+    if (!currentOrg) return
+    setSavingBranding(true)
+    try {
+      const updated = await updateOrganization(currentOrg.id, {
+        tagline: tagline || null,
+        website: website || null,
+        default_language: defaultLanguage,
+        default_platform: defaultPlatform,
+      })
+      setCurrentOrg(updated)
+      toast.success('Branding settings saved')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save branding settings')
+    } finally {
+      setSavingBranding(false)
+    }
+  }
+
   if (orgLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -157,8 +217,136 @@ export function SettingsPage() {
     <div className="max-w-2xl space-y-8">
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground mt-1">Manage your organization and platform connections.</p>
+        <p className="text-muted-foreground mt-1">Manage your organization, branding, and platform connections.</p>
       </div>
+
+      {/* Branding */}
+      {currentOrg && (
+        <section className="bg-card border border-border rounded-xl p-6">
+          <h2 className="text-lg font-semibold mb-4">Branding</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            Configure your company branding. This information will be used in generated posters and posts.
+          </p>
+
+          <div className="space-y-5">
+            {/* Logo */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Company Logo</label>
+              <div className="flex items-center gap-4">
+                {currentOrg.logo_url ? (
+                  <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-secondary border border-border">
+                    <img src={currentOrg.logo_url} alt="Company logo" className="w-full h-full object-contain" />
+                    <button
+                      onClick={async () => {
+                        if (!currentOrg) return
+                        await updateOrganization(currentOrg.id, { logo_url: null })
+                        setCurrentOrg({ ...currentOrg, logo_url: null })
+                        toast.success('Logo removed')
+                      }}
+                      className="absolute top-0.5 right-0.5 p-0.5 bg-black/60 text-white rounded-full hover:bg-black/80 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="w-20 h-20 rounded-xl border-2 border-dashed border-border flex items-center justify-center cursor-pointer hover:border-primary/50 transition-colors bg-secondary">
+                    {uploadingLogo ? (
+                      <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
+                    ) : (
+                      <Upload className="w-5 h-5 text-muted-foreground" />
+                    )}
+                    <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" disabled={uploadingLogo} />
+                  </label>
+                )}
+                <div className="text-xs text-muted-foreground">
+                  <p>Upload your company logo (PNG, JPG)</p>
+                  <p>Recommended: 200x200px or larger</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Tagline */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Tagline</label>
+              <input
+                type="text"
+                value={tagline}
+                onChange={(e) => setTagline(e.target.value)}
+                placeholder="e.g. 真诚 · 专业 · 高效"
+                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+            </div>
+
+            {/* Website */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Website</label>
+              <input
+                type="text"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                placeholder="e.g. https://vendirect.ca"
+                className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              />
+            </div>
+
+            {/* Default Language */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Default Language</label>
+              <div className="flex gap-2">
+                {LANGUAGE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setDefaultLanguage(opt.value)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      defaultLanguage === opt.value
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-background text-foreground border-border hover:bg-secondary'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Default Platform */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">Default Platform</label>
+              <div className="flex gap-2">
+                {PLATFORM_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setDefaultPlatform(opt.value)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      defaultPlatform === opt.value
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-background text-foreground border-border hover:bg-secondary'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Save */}
+            <div className="pt-2">
+              <button
+                onClick={handleSaveBranding}
+                disabled={savingBranding}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {savingBranding ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Save Branding Settings
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Connected Platforms */}
       <section className="bg-card border border-border rounded-xl p-6">
@@ -274,43 +462,6 @@ export function SettingsPage() {
               </button>
             </div>
           </div>
-        )}
-      </section>
-
-      {/* Organization Settings */}
-      <section className="bg-card border border-border rounded-xl p-6">
-        <h2 className="text-lg font-semibold mb-4">Organization Settings</h2>
-        {currentOrg ? (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1">
-                Organization Name
-              </label>
-              <p className="text-foreground">{currentOrg.name}</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1">
-                Brand Preferences
-              </label>
-              {currentOrg.brand_preferences &&
-              Object.keys(currentOrg.brand_preferences).length > 0 ? (
-                <div className="space-y-1">
-                  {Object.entries(currentOrg.brand_preferences).map(([key, value]) => (
-                    <p key={key} className="text-sm text-foreground">
-                      <span className="text-muted-foreground capitalize">{key}:</span>{' '}
-                      {typeof value === 'string' ? value : JSON.stringify(value)}
-                    </p>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No brand preferences configured.</p>
-              )}
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No organization selected. Please set up an organization first.
-          </p>
         )}
       </section>
     </div>

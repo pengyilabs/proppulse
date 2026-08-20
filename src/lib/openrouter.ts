@@ -32,7 +32,7 @@ export interface ImageGenerationResult {
 }
 
 export async function callOpenRouterImage(prompt: string): Promise<ImageGenerationResult> {
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const response = await fetch('https://openrouter.ai/api/v1/images/generations', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
@@ -41,14 +41,10 @@ export async function callOpenRouterImage(prompt: string): Promise<ImageGenerati
       'X-Title': 'PropPulse',
     },
     body: JSON.stringify({
-      model: 'black-forest-labs/flux-schnell',
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      max_tokens: 4096,
+      model: 'black-forest-labs/flux-1.1-pro',
+      prompt,
+      n: 1,
+      size: '1024x1024',
     }),
   });
 
@@ -57,16 +53,12 @@ export async function callOpenRouterImage(prompt: string): Promise<ImageGenerati
   }
 
   const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || '';
 
-  // Extract image URL from the response (Flux returns markdown image syntax or URL)
-  const imageUrlMatch = content.match(/!\[.*?\]\((https?:\/\/[^\s)]+)\)/);
-  const urlMatch = content.match(/(https?:\/\/[^\s]+\.(?:png|jpg|jpeg|webp))/i);
+  // The images endpoint returns { data: [{ url: string }] }
+  const imageUrl = data.data?.[0]?.url;
 
-  const imageUrl = imageUrlMatch?.[1] || urlMatch?.[0] || content.trim();
-
-  if (!imageUrl || !imageUrl.startsWith('http')) {
-    throw new Error('No valid image URL in Flux response');
+  if (!imageUrl) {
+    throw new Error('No image URL in response from OpenRouter image generation');
   }
 
   return { imageUrl, prompt };
